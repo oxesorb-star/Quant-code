@@ -1,0 +1,2 @@
+{"event_id": "RE-SMOKE", "time": "2026-04-01 23:36:36", "event_type": "stop_sim_??", "status": "triggered", "code": "600030", "account": "sim", "name": "????", "current_price": 24.05}
+{"event_id": "RE-SMOKE", "time": "2026-04-01 23:36:36", "event_type": "stop_sim_??", "status": "resolved", "code": "600030", "account": "sim", "reason": "sell_confirmed", "opened_at": "2026-04-01 23:36:36", "name": "????", "current_price": 24.05, "order_id": "ORD-20260401233636552276-56d178", "trade_id": "TRD-20260401233636579265-761e89"}

@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>量化交易看板</title>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --card: #1a1d2e;
+            --border: #2a2d3e;
+            --text: #e0e0e0;
+            --text-dim: #888;
+            --green: #00d4aa;
+            --red: #ff4757;
+            --blue: #3b82f6;
+            --accent: #f59e0b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header h1 { font-size: 18px; font-weight: 600; }
+        .header .status {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: var(--text-dim);
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--red);
+            animation: pulse 2s infinite;
+        }
+        .status-dot.online { background: var(--green); }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: var(--card);
+            padding: 0 20px;
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 10px 16px;
+            font-size: 14px;
+            color: var(--text-dim);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: var(--text); }
+        .tab.active {
+            color: var(--blue);
+            border-bottom-color: var(--blue);
+        }
+        .content { padding: 16px 20px; max-width: 1200px; margin: 0 auto; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .card-title {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        .stat-item {
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .stat-value { font-size: 22px; font-weight: 700; }
+        .stat-value.green { color: var(--green); }
+        .stat-value.red { color: var(--red); }
+        .stat-label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        th { color: var(--text-dim); font-weight: 500; font-size: 12px; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .badge.buy { background: rgba(0,212,170,0.15); color: var(--green); }
+        .badge.sell { background: rgba(255,71,87,0.15); color: var(--red); }
+        .badge.high { background: rgba(59,130,246,0.15); color: var(--blue); }
+        .badge.mid { background: rgba(245,158,11,0.15); color: var(--accent); }
+        .badge.low { background: rgba(255,255,255,0.08); color: var(--text-dim); }
+        .account-shelf { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+        .account-card { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; padding:14px; }
+        .account-card.real { border-left:3px solid var(--green); }
+        .account-card.sim { border-left:3px solid var(--accent); }
+        .account-card .head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+        .account-card .head strong { font-size:15px; }
+        .account-card .meta { margin-top:10px; font-size:12px; color:var(--text-dim); }
+        .mini-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+        .mini-stat { background:rgba(255,255,255,.03); border-radius:8px; padding:10px; }
+        .mini-stat .label { font-size:12px; color:var(--text-dim); }
+        .mini-stat .value { font-size:16px; font-weight:700; margin-top:4px; }
+        .overview-stack { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-bottom:12px; }
+        .status-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+        .note-list { display:flex; flex-direction:column; gap:8px; }
+        .note-item { background:rgba(255,255,255,.03); border-radius:8px; padding:12px; }
+        .note-item .meta { font-size:12px; color:var(--text-dim); margin-top:4px; }
+        .review-text {
+            white-space: pre-wrap;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.8;
+        }
+        .empty { text-align: center; padding: 20px; color: var(--text-dim); font-size: 14px; }
+        .filter-row {
+            display: flex; gap: 8px; margin-bottom: 12px; align-items: center; flex-wrap: wrap;
+        }
+        .filter-row input, .filter-row select {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .filter-row input { width: 140px; }
+        .mobile-scroll { overflow-x: auto; }
+        @media (max-width: 600px) {
+            .content { padding: 10px 12px; }
+            .stat-grid { grid-template-columns: repeat(2, 1fr); }
+            .header h1 { font-size: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>量化交易看板</h1>
+    <div class="status">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">连接中...</span>
+    </div>
+</div>
+
+<div class="tabs">
+    <div class="tab active" data-panel="overview">概览</div>
+    <div class="tab" data-panel="assets">资产概览</div>
+    <div class="tab" data-panel="trades">交易记录</div>
+    <div class="tab" data-panel="decisions">AI 决策</div>
+    <div class="tab" data-panel="reviews">每日复盘</div>
+    <div class="tab" data-panel="audits">策略审计</div>
+    <div class="tab" data-panel="heartbeat">系统状态</div>
+</div>
+
+<div class="content">
+    <div class="panel active" id="panel-overview">
+        <div class="card">
+            <div class="card-title">今日统计</div>
+            <div class="stat-grid" id="statsGrid">
+                <div class="stat-item"><div class="stat-value" id="statTrades">-</div><div class="stat-label">今日交易次数</div></div>
+                <div class="stat-item"><div class="stat-value" id="statPnl">-</div><div class="stat-label">今日盈亏</div></div>
+                <div class="stat-item"><div class="stat-value" id="statDecisions">-</div><div class="stat-label">AI 决策数</div></div>
+                <div class="stat-item"><div class="stat-value" id="statHeartbeat">-</div><div class="stat-label">系统状态</div></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">账户概览</div>
+            <div class="account-shelf" id="overviewAssets"></div>
+        </div>
+        <div class="overview-stack">
+            <div class="card">
+                <div class="card-title">系统摘要</div>
+                <div id="systemOverview"></div>
+            </div>
+            <div class="card">
+                <div class="card-title">策略审计摘要</div>
+                <div id="auditOverview"></div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-title">最近交易 (最近 10 条)</div>
+            <div class="mobile-scroll">
+                <table>
+                    <thead><tr><th>时间</th><th>操作</th><th>股票</th><th>账户</th><th>价格</th><th>数量</th><th>盈亏</th></tr></thead>
+                    <tbody id="recentTrades"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel" id="panel-assets">
+        <div class="card">
+            <div class="card-title">账户资产</div>
+            <div id="assetsSummary"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">当前持仓</div>
+            <div class="mobile-scroll">
+                <table>
+                    <thead><tr><th>账户</th><th>代码</th><th>名称</th><th>买入价</th><th>数量</th><th>成本</th><th>更新时间</th></tr></thead>
+                    <tbody id="positionsTable"></tbody>
+                </table>
+            </div>
+            <div class="empty" id="positionsEmpty" style="display:none">暂无持仓数据</div>
+        </div>
+    </div>
+
+    <div class="panel" id="panel-trades">
+        <div class="card">
+            <div class="filter-row">
+                <input type="text" id="tradeSearch" placeholder="搜索股票代码/名称">
+                <select id="tradeAccount"><option value="">全部账户</option><option value="sim">模拟</option><option value="real">实盘</option></select>
+            </div>
+            <div class="mobile-scroll">
+                <table>
+                    <thead><tr><th>时间</th><th>操作</th><th>代码</th><th>名称</th><th>账户</th><th>价格</th><th>数量</th><th>金额</th><th>盈亏</th></tr></thead>
+                    <tbody id="allTrades"></tbody>
+                </table>
+            </div>
+            <div class="empty" id="tradesEmpty" style="display:none">暂无交易记录</div>
+        </div>
+    </div>
+
+    <div class="panel" id="panel-decisions">
+        <div class="card">
+            <div class="filter-row">
+                <input type="text" id="decisionSearch" placeholder="搜索股票代码/名称">
+                <select id="decisionConf"><option value="">全部置信度</option><option value="高">高</option><option value="中">中</option><option value="低">低</option></select>
+            </div>
+            <div class="mobile-scroll">
+                <table>
+                    <thead><tr><th>时间</th><th>代码</th><th>名称</th><th>决策</th><th>置信度</th><th>价格</th><th>J值</th><th>RSI</th></tr></thead>
+                    <tbody id="allDecisions"></tbody>
+                </table>
+            </div>
+            <div class="empty" id="decisionsEmpty" style="display:none">暂无 AI 决策</div>
+        </div>
+    </div>
+
+    <div class="panel" id="panel-reviews">
+        <div class="card">
+            <div class="card-title">每日复盘报告</div>
+            <div id="reviewsList"></div>
+            <div class="empty" id="reviewsEmpty" style="display:none">暂无复盘报告</div>
+        </div>
+    </div>
+
+    <div class="panel" id="panel-audits">
+        <div class="card">
+            <div class="card-title">策略审计报告</div>
+            <div id="auditsList"></div>
+            <div class="empty" id="auditsEmpty" style="display:none">暂无审计报告</div>
+        </div>
+    </div>
+
+    <div class="panel" id="panel-heartbeat">
+        <div class="card">
+            <div class="card-title">系统状态摘要</div>
+            <div id="heartbeatSummary"></div>
+        </div>
+        <div class="card">
+            <div class="card-title">系统心跳记录</div>
+            <div class="mobile-scroll">
+                <table>
+                    <thead><tr><th>时间</th><th>主机</th><th>交易时段</th><th>数据源</th><th>状态</th></tr></thead>
+                    <tbody id="heartbeatTable"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/runtime-config.js?v=20260331-secure1"></script>
+<script>
+function showConfigError(message) {
+    console.error(message);
+    document.body.innerHTML = `<div class="content"><div class="card"><div class="card-title">配置错误</div><div class="empty">${message}</div></div></div>`;
+}
+function getRequiredRuntimeConfig(name) {
+    const cfg = window.__QUANT_TRADE_CONFIG__ || {};
+    const value = (cfg[name] || "").toString().trim();
+    if (!value) throw new Error(`Missing required runtime config: ${name}`);
+    return value;
+}
+let ENV_ID, PUBLISHABLE_KEY, FUNCTION_URL;
+try {
+    ENV_ID = getRequiredRuntimeConfig("TCB_ENV_ID");
+    PUBLISHABLE_KEY = getRequiredRuntimeConfig("TCB_PUBLISHABLE_KEY");
+    FUNCTION_URL = getRequiredRuntimeConfig("TCB_FUNCTION_URL");
+} catch (error) {
+    showConfigError(error.message);
+    throw error;
+}
+
+function normalizeDateKey(v) {
+    const s = (v || '').toString().trim();
+    return /^\d{8}$/.test(s) ? `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}` : s;
+}
+
+function pickLatestByDate(rows, dateField = 'date') {
+    const map = {};
+    (rows || []).forEach(r => {
+        if (r?.archived) return;
+        const key = normalizeDateKey(r?.[dateField]);
+        if (!key) return;
+        const prev = map[key];
+        const curTs = (r?.upload_time || '').toString();
+        const prevTs = (prev?.upload_time || '').toString();
+        if (!prev || curTs >= prevTs) map[key] = { ...r, [dateField]: key };
+    });
+    return Object.values(map).sort((a, b) =>
+        ((b.upload_time || '').localeCompare(a.upload_time || '')) ||
+        ((b[dateField] || '').localeCompare(a[dateField] || ''))
+    );
+}
+
+// 调用云函数查询
+async function queryCollection(name, limit, orderBy) {
+    try {
+        const field = typeof orderBy === 'string' ? orderBy : (orderBy?.field || 'time');
+        const dir = typeof orderBy === 'string' ? 'desc' : (orderBy?.dir || 'desc');
+        
+        const resp = await fetch(FUNCTION_URL, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${PUBLISHABLE_KEY}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                action: "query",
+                collection: name,
+                limit: limit || 100,
+                orderBy: { field, direction: dir }
+            })
+        });
+        
+        if (!resp.ok) {
+            const errText = await resp.text();
+            console.error(`查询 ${name} 失败:`, resp.status, errText.slice(0, 200));
+            return [];
+        }
+        
+        const res = await resp.json();
+        console.log(`查询 ${name}:`, JSON.stringify(res).slice(0, 300));
+        return res.data || [];
+    } catch (e) {
+        console.error("查询失败:", name, e);
+        return [];
+    }
+}
+
+function fmtPnl(v) {
+    if (v === undefined || v === null || v === 0) return '-';
+    const sign = v >= 0 ? '+' : '';
+    return `<span style="color:${v >= 0 ? 'var(--green)' : 'var(--red)'}">${sign}${Number(v).toFixed(2)}</span>`;
+}
+function badge(text, type) { return `<span class="badge ${type}">${text}</span>`; }
+function money(v) { return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function esc(v) { return String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function tsOf(row) { return String(row?.upload_time || row?.timestamp || row?.time || ''); }
+function toMillis(v) {
+    const t = Date.parse(String(v || '').replace(' ', 'T'));
+    return Number.isFinite(t) ? t : 0;
+}
+function looksLikeCodeName(name, code) {
+    const n = String(name || '').trim();
+    const c = String(code || '').trim();
+    return !n || n === c || /^\d{6}$/.test(n);
+}
+function buildNameHints(rows) {
+    const hints = {};
+    (rows || []).forEach(r => {
+        const code = String(r?.code || '').trim();
+        const name = String(r?.name || '').trim();
+        if (code && !hints[code] && !looksLikeCodeName(name, code)) hints[code] = name;
+    });
+    return hints;
+}
+function tradeLogKey(t) {
+    const semanticKey = [
+        String(t?.time || '').trim(),
+        String(t?.action || '').trim(),
+        String(t?.code || '').trim(),
+        String(t?.account || '').trim(),
+        String(t?.price ?? '').trim(),
+        String(t?.volume ?? '').trim(),
+        String(t?.amount ?? '').trim(),
+        String(t?.pnl ?? '').trim()
+    ].join('|');
+    if (semanticKey.replace(/\|/g, '').trim()) return semanticKey;
+    return String(t?.trade_id || '').trim();
+}
+function dedupeTradeLogs(rows) {
+    const map = new Map();
+    (rows || []).forEach(t => {
+        if (!t || t.archived) return;
+        const key = tradeLogKey(t);
+        if (!key) return;
+        const prev = map.get(key);
+        if (!prev || tsOf(t) >= tsOf(prev)) map.set(key, t);
+    });
+    return Array.from(map.values()).sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')) || String(b.upload_time || '').localeCompare(String(a.upload_time || '')));
+}
+function buildTradeState(trades) {
+    const latestByAccountCode = {};
+    (trades || []).forEach(t => {
+        const account = String(t?.account || '').trim();
+        const code = String(t?.code || '').trim();
+        if (!account || !code) return;
+        const key = `${account}|${code}`;
+        if (!latestByAccountCode[key] || tsOf(t) >= tsOf(latestByAccountCode[key])) latestByAccountCode[key] = t;
+    });
+    return { latestByAccountCode };
+}
+function withBestName(row, nameHints) {
+    const code = String(row?.code || '').trim();
+    const name = String(row?.name || '').trim();
+    if (code && looksLikeCodeName(name, code) && nameHints[code]) return { ...row, name: nameHints[code] };
+    return row;
+}
+function isClosedPosition(account, code, tradeState) {
+    const latest = tradeState?.latestByAccountCode?.[`${account}|${code}`];
+    return Boolean(latest && String(latest.action || '').includes('全部清仓'));
+}
+function pickLatestByKey(rows, keyFn) {
+    const map = new Map();
+    (rows || []).forEach(r => {
+        if (!r || r.archived) return;
+        const key = keyFn(r);
+        if (!key) return;
+        const prev = map.get(key);
+        if (!prev || tsOf(r) >= tsOf(prev)) map.set(key, r);
+    });
+    return Array.from(map.values());
+}
+function buildAssetState(rows, nameHints = {}, tradeState = {}) {
+    const state = { real: { balance: null, summary: null, positions: [] }, sim: { balance: null, summary: null, positions: [] } };
+    const latestBalances = pickLatestByKey(rows, r => r.snapshot_type === 'balance' ? `balance|${r.account || ''}` : '');
+    const latestSummaries = pickLatestByKey(rows, r => r.snapshot_type === 'position_summary' ? `summary|${r.account || ''}` : '');
+    latestBalances.forEach(row => {
+        const bucket = state[row.account];
+        if (bucket) bucket.balance = row;
+    });
+    latestSummaries.forEach(row => {
+        const bucket = state[row.account];
+        if (bucket) bucket.summary = row;
+    });
+    ['real', 'sim'].forEach(account => {
+        const bucket = state[account];
+        const anchorTs = Math.max(toMillis(bucket.balance?.upload_time), toMillis(bucket.summary?.upload_time));
+        const candidates = (rows || []).filter(r => r?.snapshot_type === 'position' && r.account === account);
+        let batchRows = candidates;
+        if (anchorTs > 0) {
+            batchRows = candidates.filter(r => Math.abs(toMillis(r.upload_time) - anchorTs) <= 10000);
+        }
+        let latestPositions = pickLatestByKey(batchRows, r => `position|${r.account || ''}|${r.code || ''}`);
+        latestPositions = latestPositions.filter(row => !isClosedPosition(account, String(row.code || ''), tradeState));
+        latestPositions.sort((a, b) => tsOf(b).localeCompare(tsOf(a)));
+        const stockCount = Number(bucket.summary?.stock_count || 0);
+        if (stockCount > 0 && latestPositions.length < stockCount) {
+            const selected = new Set(latestPositions.map(row => String(row.code || '')));
+            const fallbackPositions = pickLatestByKey(candidates, r => `position|${r.account || ''}|${r.code || ''}`)
+                .filter(row => !isClosedPosition(account, String(row.code || ''), tradeState))
+                .sort((a, b) => tsOf(b).localeCompare(tsOf(a)));
+            fallbackPositions.forEach(row => {
+                const code = String(row.code || '');
+                if (latestPositions.length >= stockCount || selected.has(code)) return;
+                selected.add(code);
+                latestPositions.push(row);
+            });
+        }
+        if (stockCount > 0 && latestPositions.length > stockCount) latestPositions = latestPositions.slice(0, stockCount);
+        latestPositions.forEach(row => bucket.positions.push(withBestName(row, nameHints)));
+    });
+    Object.values(state).forEach(bucket => bucket.positions.sort((a, b) => Number(b.cost_amount || 0) - Number(a.cost_amount || 0)));
+    return state;
+}
+function getAssetMetrics(bucket) {
+    const cash = Number(bucket.balance?.cash ?? bucket.summary?.cash ?? 0);
+    const marketValue = Number(bucket.summary?.position_market_value ?? bucket.positions.reduce((sum, p) => sum + Number(p.current_price || p.buy_price || 0) * Number(p.volume || 0), 0));
+    const baseCapital = Number(bucket.balance?.initial_capital ?? bucket.summary?.total_capital ?? bucket.balance?.total_capital ?? 0);
+    const totalAssets = cash + marketValue;
+    const pnl = baseCapital > 0 ? totalAssets - baseCapital : Number(bucket.balance?.pnl ?? 0);
+    const pnlPct = baseCapital > 0 ? (pnl / baseCapital) * 100 : Number(bucket.balance?.pnl_pct ?? 0);
+    const stockCount = Number(bucket.summary?.stock_count ?? bucket.positions.length ?? 0);
+    const cashRatio = totalAssets > 0 ? (cash / totalAssets) * 100 : 0;
+    return { cash, marketValue, baseCapital, totalAssets, pnl, pnlPct, stockCount, cashRatio };
+}
+function renderAccountCard(account, bucket) {
+    const label = account === 'real' ? '实盘' : '模拟盘';
+    const badgeClass = account === 'real' ? 'buy' : 'mid';
+    if (!bucket.balance && !bucket.summary && !bucket.positions.length) {
+        return `<div class="account-card ${account}"><div class="head"><strong>${label}</strong>${badge(label, badgeClass)}</div><div class="empty" style="padding:16px 0">暂无快照</div></div>`;
+    }
+    const m = getAssetMetrics(bucket);
+    return `<div class="account-card ${account}">
+        <div class="head"><strong>${label}</strong>${badge(label, badgeClass)}</div>
+        <div class="mini-grid">
+            <div class="mini-stat"><div class="label">总资产</div><div class="value">${money(m.totalAssets)}</div></div>
+            <div class="mini-stat"><div class="label">累计盈亏</div><div class="value">${fmtPnl(m.pnl)}</div></div>
+            <div class="mini-stat"><div class="label">可用现金</div><div class="value">${money(m.cash)}</div></div>
+            <div class="mini-stat"><div class="label">持仓市值</div><div class="value">${money(m.marketValue)}</div></div>
+            <div class="mini-stat"><div class="label">持仓数量</div><div class="value">${m.stockCount}</div></div>
+            <div class="mini-stat"><div class="label">现金占比</div><div class="value">${Number(m.cashRatio || 0).toFixed(1)}%</div></div>
+        </div>
+        <div class="meta">基准本金 ${money(m.baseCapital)} | 最近上传 ${esc(tsOf(bucket.balance || bucket.summary || bucket.positions[0])) || '-'}</div>
+    </div>`;
+}
+function buildHeartbeatState(rows) {
+    const sorted = (rows || []).slice().sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    if (!sorted.length) return { sorted: [], latest: null, online: false, label: '未收到心跳' };
+    const latest = sorted[0];
+    const diffMin = Math.floor((Date.now() - new Date(latest.timestamp || '').getTime()) / 60000);
+    return { sorted, latest, online: diffMin < 10, label: diffMin < 10 ? '在线' : `${diffMin} 分钟前` };
+}
+function applyHeaderStatus(state) {
+    document.getElementById('statusDot').className = state.online ? 'status-dot online' : 'status-dot';
+    document.getElementById('statusText').textContent = state.label;
+    const stat = document.getElementById('statHeartbeat');
+    stat.textContent = state.online ? '在线' : (state.latest ? '离线?' : '未连接');
+    stat.className = `stat-value ${state.online ? 'green' : 'red'}`;
+}
+function renderSystemSummary(state) {
+    if (!state.latest) return '<div class="empty">暂无系统心跳</div>';
+    const latest = state.latest;
+    return `<div class="status-grid">
+        <div class="mini-stat"><div class="label">连接状态</div><div class="value">${state.online ? '<span style="color:var(--green)">在线</span>' : '<span style="color:var(--red)">离线?</span>'}</div></div>
+        <div class="mini-stat"><div class="label">最近心跳</div><div class="value">${esc(latest.timestamp || '-')}</div></div>
+        <div class="mini-stat"><div class="label">主机</div><div class="value">${esc(latest.hostname || '-')}</div></div>
+        <div class="mini-stat"><div class="label">数据源</div><div class="value">${esc(latest.market_source || '-')}</div></div>
+        <div class="mini-stat"><div class="label">交易时段</div><div class="value">${latest.is_trade_time ? '是' : '否'}</div></div>
+        <div class="mini-stat"><div class="label">状态</div><div class="value">${esc(latest.status || 'unknown')}</div></div>
+    </div>`;
+}
+function renderAuditOverview(audits) {
+    if (!audits.length) return '<div class="empty">暂无策略审计</div>';
+    const latest = audits[0];
+    const lines = String(latest.content || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const title = lines.find(line => line.includes('审计报告')) || latest.filename || latest.date || '最新审计';
+    const snippet = lines.slice(0, 4).join(' | ');
+    return `<div class="note-list">
+        <div class="note-item"><div>${esc(title)}</div><div class="meta">日期 ${esc(latest.date || '-')} | 上传 ${esc(latest.upload_time || '-')}</div></div>
+        <div class="note-item"><div>${esc(snippet || '暂无摘要')}</div><div class="meta">当前共 ${audits.length} 份最新审计记录</div></div>
+    </div>`;
+}
+
+// 概览
+async function loadOverview() {
+    const [trades, decisions, heartbeats, snapshots, rawAudits] = await Promise.all([
+        queryCollection('trade_logs', 100, 'time'),
+        queryCollection('ai_decisions', 100, 'time'),
+        queryCollection('system_heartbeat', 10, 'timestamp'),
+        queryCollection('account_snapshots', 300, { field: 'upload_time', dir: 'desc' }),
+        queryCollection('strategy_audits', 60, { field: 'upload_time', dir: 'desc' })
+    ]);
+    const cleanTrades = dedupeTradeLogs(trades);
+    const todayPrefix = new Date().toISOString().slice(0, 10);
+    const todayTrades = cleanTrades.filter(t => (t.time || '').startsWith(todayPrefix));
+    const todayPnl = todayTrades.reduce((s, t) => s + (Number(t.pnl) || 0), 0);
+    const todayDecisions = decisions.filter(d => (d.time || '').startsWith(todayPrefix));
+
+    document.getElementById('statTrades').textContent = todayTrades.length;
+    const pnlEl = document.getElementById('statPnl');
+    pnlEl.innerHTML = fmtPnl(todayPnl);
+    pnlEl.className = `stat-value ${todayPnl >= 0 ? 'green' : 'red'}`;
+    document.getElementById('statDecisions').textContent = todayDecisions.length;
+
+    const heartbeatState = buildHeartbeatState(heartbeats);
+    applyHeaderStatus(heartbeatState);
+    const assetState = buildAssetState(snapshots, buildNameHints([...(snapshots || []), ...(cleanTrades || [])]), buildTradeState(cleanTrades));
+    document.getElementById('overviewAssets').innerHTML = ['real', 'sim'].map(account => renderAccountCard(account, assetState[account])).join('');
+    document.getElementById('systemOverview').innerHTML = renderSystemSummary(heartbeatState);
+    document.getElementById('auditOverview').innerHTML = renderAuditOverview(pickLatestByDate(rawAudits, 'date'));
+
+    const tbody = document.getElementById('recentTrades');
+    if (todayTrades.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">今日暂无交易</td></tr>';
+    } else {
+        tbody.innerHTML = todayTrades.slice(0, 10).map(t => `<tr>
+            <td>${(t.time || '').slice(11, 16)}</td>
+            <td>${(t.action || '').includes('买') ? badge('买入', 'buy') : badge('卖出', 'sell')}</td>
+            <td>${t.name || t.code || ''}</td>
+            <td>${t.account === 'sim' ? '模拟' : '实盘'}</td>
+            <td>${t.price || '-'}</td>
+            <td>${t.volume || '-'}</td>
+            <td>${fmtPnl(t.pnl)}</td>
+        </tr>`).join('');
+    }
+}
+
+async function loadTrades() {
+    const trades = dedupeTradeLogs(await queryCollection('trade_logs', 200, 'time'));
+    const search = (document.getElementById('tradeSearch').value || '').toLowerCase();
+    const account = document.getElementById('tradeAccount').value;
+    let filtered = trades;
+    if (search) filtered = filtered.filter(t => (t.code || '').includes(search) || (t.name || '').toLowerCase().includes(search));
+    if (account) filtered = filtered.filter(t => t.account === account);
+    const tbody = document.getElementById('allTrades');
+    const empty = document.getElementById('tradesEmpty');
+    if (filtered.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; }
+    else {
+        empty.style.display = 'none';
+        tbody.innerHTML = filtered.map(t => `<tr>
+            <td>${t.time || ''}</td>
+            <td>${(t.action || '').includes('买') ? badge('买入', 'buy') : badge('卖出', 'sell')}</td>
+            <td>${t.code || ''}</td><td>${t.name || ''}</td>
+            <td>${t.account === 'sim' ? '模拟' : '实盘'}</td>
+            <td>${t.price || '-'}</td><td>${t.volume || '-'}</td>
+            <td>${t.amount || '-'}</td><td>${fmtPnl(t.pnl)}</td>
+        </tr>`).join('');
+    }
+}
+
+async function loadDecisions() {
+    const decisions = await queryCollection('ai_decisions', 200, 'time');
+    const search = (document.getElementById('decisionSearch').value || '').toLowerCase();
+    const conf = document.getElementById('decisionConf').value;
+    let filtered = decisions;
+    if (search) filtered = filtered.filter(d => (d.code || '').includes(search) || (d.name || '').toLowerCase().includes(search));
+    if (conf) filtered = filtered.filter(d => d.confidence === conf);
+    const tbody = document.getElementById('allDecisions');
+    const empty = document.getElementById('decisionsEmpty');
+    if (filtered.length === 0) { tbody.innerHTML = ''; empty.style.display = 'block'; }
+    else {
+        empty.style.display = 'none';
+        tbody.innerHTML = filtered.map(d => {
+            const confClass = d.confidence === '高' ? 'high' : d.confidence === '中' ? 'mid' : 'low';
+            const decClass = (d.decision || '').includes('买') ? 'buy' : (d.decision || '').includes('卖') ? 'sell' : '';
+            return `<tr>
+                <td>${(d.time || '').slice(5, 16)}</td><td>${d.code || ''}</td><td>${d.name || ''}</td>
+                <td>${badge(d.decision || '', decClass)}</td><td>${badge(d.confidence || '', confClass)}</td>
+                <td>${d.price || '-'}</td><td>${d.j_val ?? '-'}</td><td>${d.rsi ?? '-'}</td>
+            </tr>`;
+        }).join('');
+    }
+}
+
+async function loadReviews() {
+    const rawReviews = await queryCollection('daily_reviews', 100, { field: 'upload_time', dir: 'desc' });
+    const reviews = pickLatestByDate(rawReviews, 'date');
+    const container = document.getElementById('reviewsList');
+    const empty = document.getElementById('reviewsEmpty');
+    if (reviews.length === 0) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    container.innerHTML = reviews.map(r => `<div class="card" style="margin-bottom:12px">
+        <div class="card-title">${r.date || ''} <span style="float:right;font-size:12px">上传: ${r.upload_time || ''}</span></div>
+        <div class="review-text">${esc(r.content || '')}</div>
+    </div>`).join('');
+}
+
+async function loadHeartbeat() {
+    const heartbeats = await queryCollection('system_heartbeat', 50, 'timestamp');
+    document.getElementById('heartbeatSummary').innerHTML = renderSystemSummary(buildHeartbeatState(heartbeats));
+    const tbody = document.getElementById('heartbeatTable');
+    tbody.innerHTML = heartbeats.map(h => `<tr>
+        <td>${esc(h.timestamp || '')}</td><td>${esc(h.hostname || '-')}</td>
+        <td>${h.is_trade_time ? '<span style="color:var(--green)">是</span>' : '<span style="color:var(--red)">否</span>'}</td>
+        <td>${esc(h.market_source || '-')}</td>
+        <td>${badge(h.status || 'unknown', h.status === 'running' ? 'buy' : 'sell')}</td>
+    </tr>`).join('');
+}
+
+async function loadAssets() {
+    const [snapshots, trades] = await Promise.all([
+        queryCollection('account_snapshots', 300, { field: 'upload_time', dir: 'desc' }),
+        queryCollection('trade_logs', 200, 'time')
+    ]);
+    const cleanTrades = dedupeTradeLogs(trades);
+    const summaryEl = document.getElementById('assetsSummary');
+    const tbody = document.getElementById('positionsTable');
+    const empty = document.getElementById('positionsEmpty');
+    const assetState = buildAssetState(snapshots, buildNameHints([...(snapshots || []), ...(cleanTrades || [])]), buildTradeState(cleanTrades));
+    summaryEl.innerHTML = ['real', 'sim'].map(account => renderAccountCard(account, assetState[account])).join('');
+    const positions = ['real', 'sim'].flatMap(account => assetState[account].positions.map(p => ({ ...p, account })));
+    if (positions.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+    } else {
+        empty.style.display = 'none';
+        tbody.innerHTML = positions.map(p => `<tr>
+            <td>${p.account === 'sim' ? badge('模拟', 'mid') : badge('实盘', 'buy')}</td>
+            <td>${esc(p.code || '')}</td>
+            <td>${esc(p.name || p.code || '')}</td>
+            <td>${p.buy_price || '-'}</td>
+            <td>${p.volume || '-'}</td>
+            <td>${money(p.cost_amount || 0)}</td>
+            <td style="font-size:12px;color:var(--text-dim)">${esc(p.timestamp || p.upload_time || '')}</td>
+        </tr>`).join('');
+    }
+}
+
+async function loadAudits() {
+    const rawAudits = await queryCollection('strategy_audits', 100, { field: 'upload_time', dir: 'desc' });
+    const audits = pickLatestByDate(rawAudits, 'date');
+    const container = document.getElementById('auditsList');
+    const empty = document.getElementById('auditsEmpty');
+    if (audits.length === 0) { container.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    const reverseAuditEntries = (content) => {
+        const text = String(content || '').replace(/\r\n/g, '\n').trim();
+        if (!text) return '';
+        const blocks = text.match(/-{20,}\n[\s\S]*?(?=(?:\n-{20,}\n)|$)/g);
+        if (!blocks || blocks.length <= 1) return text;
+        return blocks.reverse().join('\n\n');
+    };
+    container.innerHTML = audits.map(a => {
+        const firstLine = (a.content || '').split('\n').find(l => l.includes('审计报告'));
+        const title = firstLine ? firstLine.replace(/^[\s-]+/, '') : a.filename || a.date;
+        return `<div class="card" style="margin-bottom:12px">
+            <div class="card-title">${esc(title || a.date)} <span style="float:right;font-size:12px">${esc(a.date || '')}</span></div>
+            <div class="review-text">${esc(reverseAuditEntries(a.content || '').substring(0, 3000))}</div>
+        </div>`;
+    }).join('');
+}
+
+// Tab 切换
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+        const panel = tab.dataset.panel;
+        if (panel === 'trades') loadTrades();
+        else if (panel === 'decisions') loadDecisions();
+        else if (panel === 'reviews') loadReviews();
+        else if (panel === 'audits') loadAudits();
+        else if (panel === 'heartbeat') loadHeartbeat();
+        else if (panel === 'assets') loadAssets();
+        else if (panel === 'overview') loadOverview();
+    });
+});
+document.getElementById('tradeSearch').addEventListener('input', loadTrades);
+document.getElementById('tradeAccount').addEventListener('change', loadTrades);
+document.getElementById('decisionSearch').addEventListener('input', loadDecisions);
+document.getElementById('decisionConf').addEventListener('change', loadDecisions);
+
+// 启动
+(async () => {
+    try {
+        if (!PUBLISHABLE_KEY) {
+            document.getElementById('statusText').textContent = '未配置 Key';
+            document.getElementById('statsGrid').innerHTML = '<div class="empty">请配置 Publishable Key</div>';
+            return;
+        }
+        document.getElementById('statusText').textContent = '已连接';
+        document.getElementById('statusDot').className = 'status-dot online';
+        await loadOverview();
+    } catch (e) {
+        console.error("启动失败:", e);
+        document.getElementById('statusText').textContent = '连接失败';
+        document.getElementById('statsGrid').innerHTML = '<div class="empty">连接失败: ' + (e.message || '未知错误') + '</div>';
+    }
+})();
+</script>
+</body>
+</html>

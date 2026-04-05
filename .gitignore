@@ -1,0 +1,13 @@
+﻿.env
+tmp_*/
+tmp_*.js
+tmp_*.html
+__pycache__/
+*.pyc
+*.pyo
+*.log
+data/*.pyc.*
+data/*.tmp
+node_modules/
+.vscode/
+.DS_Store

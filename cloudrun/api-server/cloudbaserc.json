@@ -1,0 +1,6 @@
+{
+  "envId": "osuvox-5g8bq6qif05a757f",
+  "cloudrun": {
+    "name": "quant-api"
+  }
+}

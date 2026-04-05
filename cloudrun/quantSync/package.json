@@ -1,0 +1,7 @@
+{
+  "name": "quant-sync",
+  "version": "1.0.0",
+  "dependencies": {
+    "@cloudbase/node-sdk": "^2.0.0"
+  }
+}
