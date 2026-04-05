@@ -263,6 +263,7 @@
     </div>
 </div>
 <script src="./runtime-config.js?v=20260331-secure1"></script>
+<script src="https://imgcache.qq.com/qcloud/cloudbase-js-sdk/1.7.1/cloudbase.full.js"></script>
 <script>
 function showConfigError(message){
     console.error(message);
@@ -287,6 +288,23 @@ const COMMAND_TOKEN_KEY='quant_trade_command_token';
 let _posCache={sim:{},real:{}};
 let _curSellH=null;
 let _commandTokenReady=false;
+let _tcbApp=null;
+let _tcbAuthToken=null;
+
+async function initTCBAuth(){
+    if(_tcbAuthToken)return _tcbAuthToken;
+    try{
+        _tcbApp=cloudbase.init({env:ENV_ID});
+        const auth=_tcbApp.auth();
+        await auth.signInAnonymously();
+        const token=await auth.getToken();
+        _tcbAuthToken=token;
+        return token;
+    }catch(e){
+        console.error("TCB auth failed:",e);
+        return null;
+    }
+}
 
 function normDateKey(v){
     const s=(v||'').toString().trim();
@@ -308,11 +326,14 @@ function pickLatestByDate(rows,dateField='date'){
 
 async function queryCol(name,limit,orderBy,extraQ){
     try{
+        await initTCBAuth();
         const f=typeof orderBy==='string'?orderBy:(orderBy?.field||'time');
         const d=typeof orderBy==='string'?'desc':(orderBy?.dir||'desc');
         const body={action:"query",collection:name,limit:limit||100,orderBy:{field:f,direction:d}};
         if(extraQ)body.query=extraQ;
-        const r=await fetch(FURL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+        const headers={"Content-Type":"application/json"};
+        if(_tcbAuthToken)headers["Authorization"]=`Bearer ${_tcbAuthToken}`;
+        const r=await fetch(FURL,{method:"POST",headers,body:JSON.stringify(body)});
         if(!r.ok)return[];
         const j=await r.json();return j.data||[];
     }catch(e){console.error("查询失败:",name,e);return[];}
@@ -880,6 +901,7 @@ document.getElementById('commandToken').addEventListener('keydown',e=>{if(e.key=
 
 (async()=>{
     try{
+        await initTCBAuth();
         const storedToken=getCommandToken();
         if(storedToken){
             _commandTokenReady=await validateCommandToken(storedToken);
