@@ -312,7 +312,7 @@ async function queryCol(name,limit,orderBy,extraQ){
         const d=typeof orderBy==='string'?'desc':(orderBy?.dir||'desc');
         const body={action:"query",collection:name,limit:limit||100,orderBy:{field:f,direction:d}};
         if(extraQ)body.query=extraQ;
-        const r=await fetch(FURL,{method:"POST",headers:{"Authorization":`Bearer ${PK}`,"Content-Type":"application/json"},body:JSON.stringify(body)});
+        const r=await fetch(FURL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
         if(!r.ok)return[];
         const j=await r.json();return j.data||[];
     }catch(e){console.error("查询失败:",name,e);return[];}
