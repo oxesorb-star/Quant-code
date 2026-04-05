@@ -274,11 +274,12 @@ function getRequiredRuntimeConfig(name){
     if(!value)throw new Error(`Missing required runtime config: ${name}`);
     return value;
 }
-let ENV_ID,PK,FURL;
+let ENV_ID,PK,FURL,QUERY_TOKEN='';
 try{
     ENV_ID=getRequiredRuntimeConfig("TCB_ENV_ID");
     PK=getRequiredRuntimeConfig("TCB_PUBLISHABLE_KEY");
     FURL=getRequiredRuntimeConfig("TCB_FUNCTION_URL");
+    QUERY_TOKEN=(window.__QUANT_TRADE_CONFIG__?.TCB_QUERY_TOKEN||'').toString().trim();
 }catch(error){
     showConfigError(error.message);
     throw error;
@@ -306,13 +307,25 @@ function pickLatestByDate(rows,dateField='date'){
     return Object.values(m).sort((a,b)=>((b.upload_time||'').localeCompare(a.upload_time||''))||((b[dateField]||'').localeCompare(a[dateField]||'')));
 }
 
+const SECURE_QUERY_COLLECTIONS=new Set(['ai_decisions','watch_confirm_logs','execution_gate_logs','strategy_audits']);
+function buildBaseHeaders(){
+    return {"Authorization":`Bearer ${PK}`,"Content-Type":"application/json"};
+}
+function buildQueryRequest(name,limit,orderBy,extraQ){
+    const f=typeof orderBy==='string'?orderBy:(orderBy?.field||'time');
+    const d=typeof orderBy==='string'?'desc':(orderBy?.dir||'desc');
+    const secure=SECURE_QUERY_COLLECTIONS.has(name);
+    const body={action:secure?"secure_query":"query",collection:name,limit:limit||100,orderBy:{field:f,direction:d}};
+    if(extraQ)body.query=extraQ;
+    if(secure&&QUERY_TOKEN)body.queryToken=QUERY_TOKEN;
+    const headers=buildBaseHeaders();
+    if(secure&&QUERY_TOKEN)headers["X-Query-Token"]=QUERY_TOKEN;
+    return {body,headers};
+}
 async function queryCol(name,limit,orderBy,extraQ){
     try{
-        const f=typeof orderBy==='string'?orderBy:(orderBy?.field||'time');
-        const d=typeof orderBy==='string'?'desc':(orderBy?.dir||'desc');
-        const body={action:"query",collection:name,limit:limit||100,orderBy:{field:f,direction:d}};
-        if(extraQ)body.query=extraQ;
-        const r=await fetch(FURL,{method:"POST",headers:{"Authorization":`Bearer ${PK}`,"Content-Type":"application/json"},body:JSON.stringify(body)});
+        const req=buildQueryRequest(name,limit,orderBy,extraQ);
+        const r=await fetch(FURL,{method:"POST",headers:req.headers,body:JSON.stringify(req.body)});
         if(!r.ok)return[];
         const j=await r.json();return j.data||[];
     }catch(e){console.error("查询失败:",name,e);return[];}
@@ -328,7 +341,7 @@ async function queryTradeCommands(limit,orderBy,extraQ){
         const d=typeof orderBy==='string'?'desc':(orderBy?.dir||'desc');
         const body={action:"query_trade_commands",collection:"trade_commands",commandToken,limit:limit||50,orderBy:{field:f,direction:d}};
         if(extraQ)body.query=extraQ;
-        const r=await fetch(FURL,{method:"POST",headers:{"Authorization":`Bearer ${PK}`,"Content-Type":"application/json"},body:JSON.stringify(body)});
+        const r=await fetch(FURL,{method:"POST",headers:buildBaseHeaders(),body:JSON.stringify(body)});
         if(!r.ok)return[];
         const j=await r.json().catch(()=>({}));
         return j.code===0?(j.data||[]):[];
