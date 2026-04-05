@@ -901,7 +901,6 @@ document.getElementById('commandToken').addEventListener('keydown',e=>{if(e.key=
 
 (async()=>{
     try{
-        await initTCBAuth();
         const storedToken=getCommandToken();
         if(storedToken){
             _commandTokenReady=await validateCommandToken(storedToken);
