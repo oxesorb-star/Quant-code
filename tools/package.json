@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "@cloudbase/cli": "^2.12.10",
-    "@cloudbase/js-sdk": "^2.27.1",
-    "ws": "^8.20.0"
-  }
-}
